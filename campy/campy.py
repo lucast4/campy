@@ -296,6 +296,12 @@ def Main():
 		pool = ctx.Pool(processes=params['numCams'])
 		p = pool.map_async(AcquireOneCamera, range(0,params['numCams']))
 		p.get()
+	else:
+		print("not win32 or linux...")
+		# ctx = mp.get_context("spawn")  # for linux compatibility
+		# pool = ctx.Pool(processes=params['numCams'])
+		# p = pool.map_async(AcquireOneCamera, range(0,params['numCams']))
+		# p.get()
 
 parser = argparse.ArgumentParser(
 		description="Campy CLI", formatter_class=argparse.ArgumentDefaultsHelpFormatter,
