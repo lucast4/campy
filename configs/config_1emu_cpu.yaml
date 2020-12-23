@@ -2,7 +2,7 @@
 videoFolder: "./campy/cameras/emu/test"
 videoFilename: "0.mp4"
 frameRate: 100
-recTimeInSec: 10
+recTimeInSec: 5
 
 # Camera parameters
 cameraMake: "emu"

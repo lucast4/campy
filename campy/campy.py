@@ -15,6 +15,8 @@ Usage:
 campy-acquire ./configs/config.yaml
 """
 
+import PySpin
+
 import numpy as np
 import os
 import time
@@ -84,7 +86,90 @@ def CreateCamParams(params, n_cam):
 	cam_params = OptParams(params, cam_params, opt_params_dict)
 	return cam_params
 
-def AcquireOneCamera(n_cam):
+
+def AcquireSingleThread(n_cam, params):
+	# Initializes metadata dictionary for this camera stream
+	# and inserts important configuration details
+
+	# Load camera parameters from config
+	cam_params = CreateCamParams(params, n_cam)
+
+	# Import the correct camera module for your camera
+	if cam_params["cameraMake"] == "basler":
+		from campy.cameras.basler import cam
+	elif cam_params["cameraMake"] == "flir":
+		from campy.cameras.flir import cam
+		# from campy.cameras.flir.CamClass import Camera
+		# cam = Camera()
+	elif cam_params["cameraMake"] == "emu":
+		from campy.cameras.emu import cam
+
+	# Open camera n_cam
+	print("start OpenCamera)")
+	if False:
+		# TODO: note that if use this, then get error:
+		# libc++abi.dylib: terminating with uncaught exception of type Spinnaker::Exception: Spinnaker: Can't clear a camera because something still holds a reference to the camera [-1004]
+
+		camera, cam_params = cam.OpenCamera(cam_params)
+		print(cam_params)
+	else:
+		# TODO: This needs to be in ths file. move this up.
+		cam_index = 0
+		system = PySpin.System.GetInstance()
+		cam_list = system.GetCameras()
+		camera = cam_list.GetByIndex(cam_index)
+		camera.Init()
+		cam.configure_trigger(camera)
+		camera.AcquisitionMode.SetValue(PySpin.AcquisitionMode_Continuous)
+		cam_params['cameraSerialNo'] = camera.TLDevice.DeviceSerialNumber.GetValue()
+		nodemap = camera.GetNodeMap()
+		frameWidth, frameHeight = cam.ConfigureCustomImageSettings(cam_params, nodemap)
+		cam_params["frameWidth"] = frameWidth
+		cam_params["frameHeight"] = frameHeight
+		camera.BeginAcquisition()
+
+	print("end OpenCamera)")
+
+	# Initialize queues for video writer
+	writeQueue = deque()
+	stopQueue = deque([], 1)
+
+	# Start image window display queue ('consumer' thread)
+	dispQueue = deque([], 2)
+
+
+	if False:
+		# TODO: check if thgis works.
+		threading.Thread(
+			target=display.DisplayFrames,
+			daemon=True,
+			args=(cam_params, dispQueue,),
+			).start()
+
+	# Start grabbing frames ('producer' thread)
+	if False:
+		# try grabbing frames
+		cam.GrabFrames(cam_params,
+					camera,
+					writeQueue,
+					dispQueue,
+					stopQueue)
+	else:
+		threading.Thread(
+			target = cam.GrabFrames,
+			daemon=True,
+			args = (cam_params,
+					camera,
+					writeQueue,
+					dispQueue,
+					stopQueue),
+			).start()
+
+	# Start video file writer (main 'consumer' thread)
+	campipe.WriteFrames(cam_params, writeQueue, stopQueue)
+	print("DONE SAVING")
+
+def AcquireOneCamera2(n_cam, params):
 	# Initializes metadata dictionary for this camera stream
 	# and inserts important configuration details
 
@@ -113,6 +198,53 @@ def AcquireOneCamera(n_cam):
 		daemon=True,
 		args=(cam_params, dispQueue,),
 		).start()
+
+	# Start grabbing frames ('producer' thread)
+	threading.Thread(
+		target = cam.GrabFrames,
+		daemon=True,
+		args = (cam_params,
+				camera,
+				writeQueue,
+				dispQueue,
+				stopQueue),
+		).start()
+
+	# Start video file writer (main 'consumer' thread)
+	campipe.WriteFrames(cam_params, writeQueue, stopQueue)
+
+def AcquireOneCamera(n_cam):
+	# Initializes metadata dictionary for this camera stream
+	# and inserts important configuration details
+
+	# Load camera parameters from config
+	cam_params = CreateCamParams(params, n_cam)
+
+	# Import the correct camera module for your camera
+	if cam_params["cameraMake"] == "basler":
+		from campy.cameras.basler import cam
+	elif cam_params["cameraMake"] == "flir":
+		from campy.cameras.flir import cam
+	elif cam_params["cameraMake"] == "emu":
+		from campy.cameras.emu import cam
+
+	# Open camera n_cam
+	print(1)
+	camera, cam_params = cam.OpenCamera(cam_params)
+	print(2)
+
+	# Initialize queues for video writer
+	writeQueue = deque()
+	stopQueue = deque([], 1)
+
+	# Start image window display queue ('consumer' thread)
+	dispQueue = deque([], 2)
+	if False:
+		threading.Thread(
+			target=display.DisplayFrames,
+			daemon=True,
+			args=(cam_params, dispQueue,),
+			).start()
 
 	# Start grabbing frames ('producer' thread)
 	threading.Thread(
@@ -298,13 +430,14 @@ def Main():
 		p.get()
 	else:
 		print("not win32 or linux...")
-		# ctx = mp.get_context("spawn")  # for linux compatibility
-		# pool = ctx.Pool(processes=params['numCams'])
-		# p = pool.map_async(AcquireOneCamera, range(0,params['numCams']))
-		# p.get()
+		ctx = mp.get_context("spawn")  # for linux compatibility
+		pool = ctx.Pool(processes=params['numCams'])
+		p = pool.map_async(AcquireOneCamera, range(0,params['numCams']))
+		p.get()
 
-parser = argparse.ArgumentParser(
-		description="Campy CLI", formatter_class=argparse.ArgumentDefaultsHelpFormatter,
-		)
-params = ParseClargs(parser)
-params = CombineConfigAndClargs(params)
+if True:
+	parser = argparse.ArgumentParser(
+			description="Campy CLI", formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+			)
+	params = ParseClargs(parser)
+	params = CombineConfigAndClargs(params)

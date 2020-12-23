@@ -8,18 +8,28 @@ import time
 import logging
 import sys
 
+DEBUG = True
+
 def OpenWriter(cam_params):
 	n_cam = cam_params["n_cam"]
 
 	folder_name = os.path.join(cam_params["videoFolder"], cam_params["cameraName"])
 	if cam_params["cameraMake"] == "emu":
-		cam_params["videoFilename"] = "emu" + cam_params["videoFilename"]
-	full_file_name = os.path.join(folder_name, cam_params["videoFilename"])
+		fname = "emu" + cam_params["videoFilename"]
+
+	if DEBUG:
+		import numpy as np
+		# add random number
+		tmp = str(10000*np.random.rand())[:3]
+		fname = f"{tmp}-{fname}"
+	full_file_name = os.path.join(folder_name, fname)
 
 	if not os.path.isdir(folder_name):
 		os.makedirs(folder_name)
 		print('Made directory {}.'.format(folder_name))
-	
+	else:
+		print('Saving to directory {}.'.format(folder_name))
+
 	# Load defaults
 	pix_fmt_out = cam_params["pixelFormatOutput"]
 	codec = cam_params["codec"]
@@ -88,6 +98,7 @@ def OpenWriter(cam_params):
 	while(True):
 		try:
 			try:
+				print("Writing")
 				writer = write_frames(
 					full_file_name,
 					[cam_params["frameWidth"], cam_params["frameHeight"]], # size [W,H]
@@ -104,6 +115,7 @@ def OpenWriter(cam_params):
 				writer.send(None) # Initialize the generator
 				break
 			except Exception as e:
+				print("Error (writing)")
 				logging.error('Caught exception: {}'.format(e))
 				time.sleep(0.1)
 
@@ -125,9 +137,17 @@ def WriteFrames(cam_params, writeQueue, stopQueue):
 			if writeQueue:
 				message = writeQueue.popleft()
 				if not isinstance(message, str):
+					print("[WriteFrames] saving")
 					writer.send(message)
 				elif message=='STOP':
+					print("STOP (done saving)")
 					break
+				elif message == 'NEWFILE':
+					# close file, reopen a new file.
+					print('Closing+reopining video writer for camera {}. Please wait...'.format(n_cam+1))
+					time.sleep(1)
+					writer.close()
+					writer = OpenWriter(cam_params)
 			else:
 				time.sleep(0.0001)
 		except KeyboardInterrupt:

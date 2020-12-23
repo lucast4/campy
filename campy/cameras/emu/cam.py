@@ -11,6 +11,8 @@ from collections import deque
 import csv
 import imageio
 
+NFRAMES_PER_FILE = 100
+
 def OpenCamera(cam_params, bufferSize=500, validation=False):
 	n_cam = cam_params["n_cam"]
 	cam_index = cam_params["cameraSelection"]
@@ -51,6 +53,11 @@ def GrabFrames(cam_params, camera, writeQueue, dispQueue, stopQueue):
 
 	cnt = 0
 	while(True):
+		print(cnt, numImagesToGrab)
+		# -- split files based on num frames
+		if cnt%NFRAMES_PER_FILE==0 and cnt>0:
+			print("Splitting file")
+			writeQueue.append('NEWFILE')
 		if stopQueue or cnt >= numImagesToGrab:
 			CloseCamera(cam_params, camera, grabdata)
 			writeQueue.append('STOP')
@@ -82,6 +89,7 @@ def GrabFrames(cam_params, camera, writeQueue, dispQueue, stopQueue):
 			# Waits until frame time has been reached
 			while(time.perf_counter()-timeStart < 1/cam_params["frameRate"]):
 				pass
+
 		except Exception as e:
 			logging.error('Caught exception: {}'.format(e))
 
