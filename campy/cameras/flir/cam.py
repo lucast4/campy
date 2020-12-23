@@ -71,6 +71,79 @@ CHOSEN_TRIGGER = TriggerType.HARDWARE
 
 # 	return result
 
+def configure_exposure(cam):
+    """
+     This function configures a custom exposure time. Automatic exposure is turned
+     off in order to allow for the customization, and then the custom setting is
+     applied.
+
+     :param cam: Camera to configure exposure for.
+     :type cam: CameraPtr
+     :return: True if successful, False otherwise.
+     :rtype: bool
+    """
+
+    print('*** CONFIGURING EXPOSURE ***\n')
+
+    try:
+        result = True
+
+        # Turn off automatic exposure mode
+        #
+        # *** NOTES ***
+        # Automatic exposure prevents the manual configuration of exposure
+        # times and needs to be turned off for this example. Enumerations
+        # representing entry nodes have been added to QuickSpin. This allows
+        # for the much easier setting of enumeration nodes to new values.
+        #
+        # The naming convention of QuickSpin enums is the name of the
+        # enumeration node followed by an underscore and the symbolic of
+        # the entry node. Selecting "Off" on the "ExposureAuto" node is
+        # thus named "ExposureAuto_Off".
+        #
+        # *** LATER ***
+        # Exposure time can be set automatically or manually as needed. This
+        # example turns automatic exposure off to set it manually and back
+        # on to return the camera to its default state.
+
+        if cam.ExposureAuto.GetAccessMode() != PySpin.RW:
+            print('Unable to disable automatic exposure. Aborting...')
+            return False
+
+        cam.ExposureAuto.SetValue(PySpin.ExposureAuto_Off)
+        print('Automatic exposure disabled...')
+
+        # Set exposure time manually; exposure time recorded in microseconds
+        #
+        # *** NOTES ***
+        # Notice that the node is checked for availability and writability
+        # prior to the setting of the node. In QuickSpin, availability and
+        # writability are ensured by checking the access mode.
+        #
+        # Further, it is ensured that the desired exposure time does not exceed
+        # the maximum. Exposure time is counted in microseconds - this can be
+        # found out either by retrieving the unit with the GetUnit() method or
+        # by checking SpinView.
+
+        if cam.ExposureTime.GetAccessMode() != PySpin.RW:
+            print('Unable to set exposure time. Aborting...')
+            return False
+
+        # Ensure desired exposure time does not exceed the maximum
+        # exposure_time_to_set = 2000000.0
+        exposure_time_to_set = 6000.0
+        print(cam.ExposureTime.GetMax())
+        exposure_time_to_set = min(cam.ExposureTime.GetMax(), exposure_time_to_set)
+        cam.ExposureTime.SetValue(exposure_time_to_set)
+        print('Shutter time set to %s us...\n' % exposure_time_to_set)
+
+    except PySpin.SpinnakerException as ex:
+        print('Error: %s' % ex)
+        result = False
+
+    return result
+
+
 
 def configure_custom_image_settings(cam):
     """
@@ -286,6 +359,16 @@ def configure_trigger(cam):
 		cam.TriggerOverlap.SetValue(PySpin.TriggerOverlap_ReadOut)
 	cam.TriggerMode.SetValue(PySpin.TriggerMode_On)
 
+def PrepareCamera(camera, cam_params):
+	camera.Init()
+	configure_trigger(camera)
+	camera.AcquisitionMode.SetValue(PySpin.AcquisitionMode_Continuous)
+	cam_params['cameraSerialNo'] = camera.TLDevice.DeviceSerialNumber.GetValue()
+	nodemap = camera.GetNodeMap()
+	frameWidth, frameHeight = ConfigureCustomImageSettings(cam_params, nodemap)
+	configure_exposure(camera)
+	cam_params["frameWidth"] = frameWidth
+	cam_params["frameHeight"] = frameHeight
 
 
 def OpenCamera(cam_params, frameWidth=1152, frameHeight=1024):
@@ -382,14 +465,26 @@ def OpenCamera(cam_params, frameWidth=1152, frameHeight=1024):
 
 def ConvertImages(image_result):
 	if False:
-		img = image_result.Convert(PySpin.PixelFormat_Mono8, PySpin.HQ_LINEAR)
 		print(img)
 		print(image_result)
 		print(img.GetNDArray())
 		print(np.asarray(img.GetNDArray(), dtype="uint8"))
 		assert False
-	img = np.asarray(image_result.GetNDArray(), dtype="uint8")
+	image_converted = image_result.Convert(PySpin.PixelFormat_Mono8, PySpin.HQ_LINEAR)
+	if False:
+		# to devbug why videos images are tiled.
+		image_converted.Save("/tmp/tmp.png")
+	img = np.asarray(image_converted.GetNDArray(), dtype="uint8")
+
 	return img
+
+def ResetGrabdata(cam_params):
+	grabdata = {}
+	grabdata['timeStamp'] = []
+	grabdata['frameNumber'] = []
+	grabdata['newfile'] = []
+	grabdata["grabtime_firstframe"] = []
+	return grabdata
 
 
 def GrabFrames(cam_params, camera, writeQueue, dispQueue, stopQueue):
@@ -399,9 +494,12 @@ def GrabFrames(cam_params, camera, writeQueue, dispQueue, stopQueue):
 	timeout = 0
 
 	# Create dictionary for appending frame number and timestamp information
-	grabdata = {}
-	grabdata['timeStamp'] = []
-	grabdata['frameNumber'] = []
+	# grabdata = {}
+	# grabdata['timeStamp'] = []
+	# grabdata['frameNumber'] = []
+	# grabdata['newfile'] = []
+	# grabdata["grabtime_firstframe"] = []
+	grabdata = ResetGrabdata(cam_params)
 
 	frameRate = cam_params['frameRate']
 	recTimeInSec = cam_params['recTimeInSec']
@@ -413,6 +511,9 @@ def GrabFrames(cam_params, camera, writeQueue, dispQueue, stopQueue):
 	numImagesToGrab = recTimeInSec*frameRate
 	chunkLengthInFrames = int(round(chunkLengthInSec*frameRate))
 
+	filenum = 0 # keep track, for metadata saving purposes. only matter if saving
+	# one file per trial.
+
 	grabbing = False
 	if False:
 		if cam_params["trigConfig"] and cam_params["settingsConfig"]:
@@ -423,6 +524,7 @@ def GrabFrames(cam_params, camera, writeQueue, dispQueue, stopQueue):
 
 	while(grabbing):
 		if stopQueue or cnt >= numImagesToGrab:
+			# Stop experiment.
 			# CloseCamera(cam_params, camera, grabdata)
 			writeQueue.append('STOP')
 			# TODO: make option for this to end when long gap (inter trial interval).
@@ -437,14 +539,33 @@ def GrabFrames(cam_params, camera, writeQueue, dispQueue, stopQueue):
 				# image_converted = image_result.Convert(PySpin.PixelFormat_Mono8, PySpin.HQ_LINEAR)
 				# img = image_converted.GetNDArray()
 
-				# Append numpy array to writeQueue for writer to append to file
-				writeQueue.append(img)
-
 				# Get timestamp of grabbed frame from camera
 				if cnt == 0:
 					timeFirstGrab = time.monotonic_ns()
+					grabdata["grabtime_firstframe"]=timeFirstGrab/1e9
 				grabtime = (time.monotonic_ns() - timeFirstGrab)/1e9
+
+				# split file? This useful for trial-based recordings. (one video per trial)
+				# (each trial separated by a long duration)
+				if cam_params['trialStructure'] and len(grabdata['timeStamp'])>0:
+					inter_frame_time = 1000*(grabtime-grabdata['timeStamp'][-1])
+					print("grabtime, inter_frame_time", grabtime, inter_frame_time)
+					if inter_frame_time>cam_params['trialITI']:
+						print("grabtime > iti --> NEW TRIAL)")
+						writeQueue.append('NEWFILE')
+						grabdata['newfile'].append(1)
+						filenum =+ 1
+						# TODO: save grabdata
+						# TODO: reset grabdata (for a new file).
+						SaveMetadata(cam_params, grabdata, suffix=f"-t{filenum}")
+						grabdata = ResetGrabdata(cam_params)
+					else:
+						grabdata['newfile'].append(0)
+				
 				grabdata['timeStamp'].append(grabtime)
+
+				# Append numpy array to writeQueue for writer to append to file
+				writeQueue.append(img)
 
 				cnt += 1
 				grabdata['frameNumber'].append(cnt) # first frame = 1
@@ -460,9 +581,9 @@ def GrabFrames(cam_params, camera, writeQueue, dispQueue, stopQueue):
 					print('Camera %i collected %i frames at %i fps.' % (n_cam,cnt,fps_count))
 
 				# === print things
-				print(grabdata)
-				print(len(writeQueue))
 				if DEBUG:
+					print(grabdata)
+					print(len(writeQueue))
 					if len(writeQueue)>30:
 						break
 			else:
@@ -492,7 +613,7 @@ def CloseCamera(cam_params, camera, grabdata):
 		print("TRIED TO CLOSE, FAILED")
 		time.sleep(0.1)
 
-def SaveMetadata(cam_params, grabdata):
+def SaveMetadata(cam_params, grabdata, suffix=""):
 	# TODO: look thru this. seems to be working.
 	n_cam = cam_params["n_cam"]
 
@@ -508,16 +629,20 @@ def SaveMetadata(cam_params, grabdata):
 	print('Camera {} saved {} frames at {} fps.'.format(n_cam+1, frame_count, fps_count))
 
 	try:
-		npy_filename = os.path.join(full_folder_name, 'frametimes.npy')
+		npy_filename = os.path.join(full_folder_name, f'frametimes{suffix}.npy')
 		x = np.array([meta['frameNumber'], meta['timeStamp']])
 		np.save(npy_filename,x)
 	except:
 		pass
 
-	csv_filename = os.path.join(full_folder_name, 'metadata.csv')
+	csv_filename = os.path.join(full_folder_name, f'metadata{suffix}.csv')
 	meta = cam_params
 	meta['totalFrames'] = grabdata['frameNumber'][-1]
 	meta['totalTime'] = grabdata['timeStamp'][-1]
+	for k in ['newfile']:
+		meta[k] = grabdata[k]
+	meta["grabtime_firstframe"] = grabdata["grabtime_firstframe"]
+
 	keys = meta.keys()
 	vals = meta.values()
 	

@@ -2,7 +2,8 @@ from campy import campy as cp
 
 
 n_cam = 0
-fname = "/Users/lucas/code/campy/configs/config_flir.yaml"
+# fname = "/Users/lucas/code/campy/configs/config_flir.yaml"
+fname = "/Users/lucas/code/campy/configs/config_1emu_cpu.yaml"
 params = cp.LoadConfig(fname)
 cam_params = cp.CreateCamParams(params, n_cam)
 

@@ -2,7 +2,11 @@
 videoFolder: "/Users/lucas/code/campy/test"
 videoFilename: "0.mp4"
 frameRate: 10
-recTimeInSec: 5
+recTimeInSec: 14400 # total recording time, across all files.
+
+# Trial-based recording
+trialStructure: True
+trialITI: 1000
 
 # Camera parameters
 cameraMake: "flir"
@@ -26,5 +30,5 @@ displayDownsample: 2
 
 # Other parameters
 ffmpegPath: [] #["/home/usr/Documents/ffmpeg/ffmpeg"]
-frameWidth: [1152, 1152]
-frameHeight: [712, 712]
+frameWidth: [720, 720]
+frameHeight: [480, 480]

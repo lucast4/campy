@@ -87,6 +87,7 @@ def CreateCamParams(params, n_cam):
 	return cam_params
 
 
+
 def AcquireSingleThread(n_cam, params):
 	# Initializes metadata dictionary for this camera stream
 	# and inserts important configuration details
@@ -101,34 +102,50 @@ def AcquireSingleThread(n_cam, params):
 		from campy.cameras.flir import cam
 		# from campy.cameras.flir.CamClass import Camera
 		# cam = Camera()
+		# Seems like need to initiate the camera object here, otherwise 
+		# errors.
 	elif cam_params["cameraMake"] == "emu":
 		from campy.cameras.emu import cam
 
 	# Open camera n_cam
-	print("start OpenCamera)")
-	if False:
-		# TODO: note that if use this, then get error:
-		# libc++abi.dylib: terminating with uncaught exception of type Spinnaker::Exception: Spinnaker: Can't clear a camera because something still holds a reference to the camera [-1004]
+	if cam_params["cameraMake"] == "flir":
+		if False:
+			# TODO: note that if use this, then get error:
+			# libc++abi.dylib: terminating with uncaught exception of type Spinnaker::Exception: Spinnaker: Can't clear a camera because something still holds a reference to the camera [-1004]
 
-		camera, cam_params = cam.OpenCamera(cam_params)
-		print(cam_params)
+			camera, cam_params = cam.OpenCamera(cam_params)
+			print(cam_params)
+		elif False:
+			# TODO: This needs to be in ths file. move this up.
+			cam_index = 0
+			system = PySpin.System.GetInstance()
+			cam_list = system.GetCameras()
+			camera = cam_list.GetByIndex(cam_index)
+			camera.Init()
+			cam.configure_trigger(camera)
+			camera.AcquisitionMode.SetValue(PySpin.AcquisitionMode_Continuous)
+
+			cam_params['cameraSerialNo'] = camera.TLDevice.DeviceSerialNumber.GetValue()
+			nodemap = camera.GetNodeMap()
+			frameWidth, frameHeight = cam.ConfigureCustomImageSettings(cam_params, nodemap)
+			cam.configure_exposure(camera)
+			cam_params["frameWidth"] = frameWidth
+			cam_params["frameHeight"] = frameHeight
+			camera.BeginAcquisition()
+		else:
+			# Initialize camera
+			system = PySpin.System.GetInstance()
+			cam_list = system.GetCameras()
+			camera = cam_list.GetByIndex(n_cam)
+			# cam.configure_trigger(camera)
+
+			# Configuration.
+			cam.PrepareCamera(camera, cam_params)
+
+			# Start acquiring.
+			camera.BeginAcquisition()
 	else:
-		# TODO: This needs to be in ths file. move this up.
-		cam_index = 0
-		system = PySpin.System.GetInstance()
-		cam_list = system.GetCameras()
-		camera = cam_list.GetByIndex(cam_index)
-		camera.Init()
-		cam.configure_trigger(camera)
-		camera.AcquisitionMode.SetValue(PySpin.AcquisitionMode_Continuous)
-		cam_params['cameraSerialNo'] = camera.TLDevice.DeviceSerialNumber.GetValue()
-		nodemap = camera.GetNodeMap()
-		frameWidth, frameHeight = cam.ConfigureCustomImageSettings(cam_params, nodemap)
-		cam_params["frameWidth"] = frameWidth
-		cam_params["frameHeight"] = frameHeight
-		camera.BeginAcquisition()
-
-	print("end OpenCamera)")
+		camera, cam_params = cam.OpenCamera(cam_params)
 
 	# Initialize queues for video writer
 	writeQueue = deque()
@@ -167,7 +184,6 @@ def AcquireSingleThread(n_cam, params):
 
 	# Start video file writer (main 'consumer' thread)
 	campipe.WriteFrames(cam_params, writeQueue, stopQueue)
-	print("DONE SAVING")
 
 def AcquireOneCamera2(n_cam, params):
 	# Initializes metadata dictionary for this camera stream
@@ -229,9 +245,19 @@ def AcquireOneCamera(n_cam):
 		from campy.cameras.emu import cam
 
 	# Open camera n_cam
-	print(1)
-	camera, cam_params = cam.OpenCamera(cam_params)
-	print(2)
+	if cam_params["cameraMake"] == "flir":
+		# Initialize camera
+		system = PySpin.System.GetInstance()
+		cam_list = system.GetCameras()
+		camera = cam_list.GetByIndex(n_cam)
+
+		# Configuration.
+		cam.PrepareCamera(camera, cam_params)
+
+		# Start acquiring.
+		camera.BeginAcquisition()
+	else:
+		camera, cam_params = cam.OpenCamera(cam_params)
 
 	# Initialize queues for video writer
 	writeQueue = deque()
@@ -392,6 +418,18 @@ def ParseClargs(parser):
 		dest="displayDownsample",
 		type=int,
 		help="Downsampling factor for displaying images.",
+	)
+	parser.add_argument(
+		"--trialStructure",
+		dest="trialStructure",
+		type=bool,
+		help="splits into files based on intertrial intervals",
+	)
+	parser.add_argument(
+		"--trialITI",
+		dest="trialITI",
+		type=ast.literal_eval,
+		help="intertrial interval (msec). if 2 triggers seprated by more than this, then will make new file. ",
 	)
 	return parser.parse_args()
 

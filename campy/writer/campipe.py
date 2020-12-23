@@ -8,21 +8,28 @@ import time
 import logging
 import sys
 
-DEBUG = True
+DEBUG = False
 
-def OpenWriter(cam_params):
+def OpenWriter(cam_params, filenum=0):
 	n_cam = cam_params["n_cam"]
 
 	folder_name = os.path.join(cam_params["videoFolder"], cam_params["cameraName"])
 	if cam_params["cameraMake"] == "emu":
 		fname = "emu" + cam_params["videoFilename"]
+	else:
+		fname = cam_params["videoFilename"]
+
+	fname_str, fname_ext = os.path.splitext(fname)
+	fname_str = f"{fname_str}-t{filenum}"
 
 	if DEBUG:
 		import numpy as np
 		# add random number
 		tmp = str(10000*np.random.rand())[:3]
 		fname = f"{tmp}-{fname}"
-	full_file_name = os.path.join(folder_name, fname)
+
+	full_file_name = os.path.join(folder_name, f"{fname_str}{fname_ext}")
+	# full_file_name = os.path.join(folder_name, fname)
 
 	if not os.path.isdir(folder_name):
 		os.makedirs(folder_name)
@@ -98,7 +105,10 @@ def OpenWriter(cam_params):
 	while(True):
 		try:
 			try:
-				print("Writing")
+				# print("Writing")
+				# print(cam_params)
+				# print(gpu_params)
+				# assert False
 				writer = write_frames(
 					full_file_name,
 					[cam_params["frameWidth"], cam_params["frameHeight"]], # size [W,H]
@@ -127,8 +137,11 @@ def OpenWriter(cam_params):
 def WriteFrames(cam_params, writeQueue, stopQueue):
 	n_cam = cam_params["n_cam"]
 
+	# if save mjultiple files, keep track of filenum
+	filenum = 0
+
 	# Start ffmpeg video writer 
-	writer = OpenWriter(cam_params)
+	writer = OpenWriter(cam_params, filenum)
 	message = ''
 
 	# Continue writing...
@@ -137,7 +150,7 @@ def WriteFrames(cam_params, writeQueue, stopQueue):
 			if writeQueue:
 				message = writeQueue.popleft()
 				if not isinstance(message, str):
-					print("[WriteFrames] saving")
+					# print("[WriteFrames] saving")
 					writer.send(message)
 				elif message=='STOP':
 					print("STOP (done saving)")
@@ -147,7 +160,8 @@ def WriteFrames(cam_params, writeQueue, stopQueue):
 					print('Closing+reopining video writer for camera {}. Please wait...'.format(n_cam+1))
 					time.sleep(1)
 					writer.close()
-					writer = OpenWriter(cam_params)
+					filenum += 1
+					writer = OpenWriter(cam_params, filenum)
 			else:
 				time.sleep(0.0001)
 		except KeyboardInterrupt:
