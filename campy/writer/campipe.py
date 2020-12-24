@@ -123,6 +123,7 @@ def OpenWriter(cam_params, filenum=0):
 					output_params=gpu_params,
 					)
 				writer.send(None) # Initialize the generator
+				# TODO: why images are tiled in saved file?
 				break
 			except Exception as e:
 				print("Error (writing)")

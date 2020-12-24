@@ -369,6 +369,8 @@ def PrepareCamera(camera, cam_params):
 	configure_exposure(camera)
 	cam_params["frameWidth"] = frameWidth
 	cam_params["frameHeight"] = frameHeight
+	# TODO: make a cameraParams (like in basler version).
+	# TODO: index cameras using serial numbers.
 
 
 def OpenCamera(cam_params, frameWidth=1152, frameHeight=1024):
@@ -484,14 +486,24 @@ def ResetGrabdata(cam_params):
 	grabdata['frameNumber'] = []
 	grabdata['newfile'] = []
 	grabdata["grabtime_firstframe"] = []
+	grabdata["frameNumberThisTrial"] = []
 	return grabdata
 
 
-def GrabFrames(cam_params, camera, writeQueue, dispQueue, stopQueue):
+def GrabFrames(cam_params, camera, writeQueue, dispQueue, stopQueue, v1=False):
+	"""
+	v1, use old version where intertrial interval is based on time between successive frames. this 
+	problem is that saves after frame 0. new version saves during ITI istelf. detects ITI based on 
+	duration of timeout for getNextFrame.
+	"""
+
 	n_cam = cam_params["n_cam"]
 
-	cnt = 0
+	cnt = 0 # cumulative frames over all files.
 	timeout = 0
+	framenum_thistrial = 0 # framenum within this trial (i.e., file)
+	filenum = 0 # keep track, for metadata saving purposes. only matter if saving
+	# one file per trial.
 
 	# Create dictionary for appending frame number and timestamp information
 	# grabdata = {}
@@ -511,9 +523,6 @@ def GrabFrames(cam_params, camera, writeQueue, dispQueue, stopQueue):
 	numImagesToGrab = recTimeInSec*frameRate
 	chunkLengthInFrames = int(round(chunkLengthInSec*frameRate))
 
-	filenum = 0 # keep track, for metadata saving purposes. only matter if saving
-	# one file per trial.
-
 	grabbing = False
 	if False:
 		if cam_params["trigConfig"] and cam_params["settingsConfig"]:
@@ -523,7 +532,7 @@ def GrabFrames(cam_params, camera, writeQueue, dispQueue, stopQueue):
 	print(cam_params["cameraName"], "ready to trigger.")
 
 	while(grabbing):
-		if stopQueue or cnt >= numImagesToGrab:
+		if stopQueue or cnt >= numImagesToGrab: # TODO, also add limit within each file.
 			# Stop experiment.
 			# CloseCamera(cam_params, camera, grabdata)
 			writeQueue.append('STOP')
@@ -532,62 +541,104 @@ def GrabFrames(cam_params, camera, writeQueue, dispQueue, stopQueue):
 			break
 		try:
 			# Grab image from camera buffer if available
-			image_result = camera.GetNextImage()
+			try:
+				if v1:
+					image_result = camera.GetNextImage()
+				else:
+					image_result = camera.GetNextImage(cam_params['trialITI'])
 
-			if not image_result.IsIncomplete():
-				img  = ConvertImages(image_result)
-				# image_converted = image_result.Convert(PySpin.PixelFormat_Mono8, PySpin.HQ_LINEAR)
-				# img = image_converted.GetNDArray()
+				if not image_result.IsIncomplete():
+					img  = ConvertImages(image_result)
+					# image_converted = image_result.Convert(PySpin.PixelFormat_Mono8, PySpin.HQ_LINEAR)
+					# img = image_converted.GetNDArray()
 
-				# Get timestamp of grabbed frame from camera
-				if cnt == 0:
-					timeFirstGrab = time.monotonic_ns()
-					grabdata["grabtime_firstframe"]=timeFirstGrab/1e9
-				grabtime = (time.monotonic_ns() - timeFirstGrab)/1e9
+					# Get timestamp of grabbed frame from camera
+					if cnt == 0:
+						timeFirstGrab = time.monotonic_ns()
+						grabdata["grabtime_firstframe"]=timeFirstGrab/1e9
+					grabtime = (time.monotonic_ns() - timeFirstGrab)/1e9
+					if len(grabdata['timeStamp'])>0:
+						inter_frame_time = 1000*(grabtime-grabdata['timeStamp'][-1])
+						print("grabtime, inter_frame_time", grabtime, inter_frame_time)
+						# TODO: printing above, make working when metadat one for each fil;e.
 
-				# split file? This useful for trial-based recordings. (one video per trial)
-				# (each trial separated by a long duration)
-				if cam_params['trialStructure'] and len(grabdata['timeStamp'])>0:
-					inter_frame_time = 1000*(grabtime-grabdata['timeStamp'][-1])
-					print("grabtime, inter_frame_time", grabtime, inter_frame_time)
-					if inter_frame_time>cam_params['trialITI']:
-						print("grabtime > iti --> NEW TRIAL)")
+					# split file? This useful for trial-based recordings. (one video per trial)
+					# (each trial separated by a long duration)
+					if v1:
+						# This moved to outside this loop.
+						if cam_params['trialStructure'] and len(grabdata['timeStamp'])>0:
+							if inter_frame_time>cam_params['trialITI']:
+								writeQueue.append('NEWFILE')
+								grabdata['newfile'].append(1)
+								filenum += 1
+								# TODO: save grabdata
+								# TODO: reset grabdata (for a new file).
+								SaveMetadata(cam_params, grabdata, suffix=f"-t{filenum}")
+								grabdata = ResetGrabdata(cam_params)
+							else:
+								grabdata['newfile'].append(0)
+					
+					grabdata['timeStamp'].append(grabtime)
+
+					# Append numpy array to writeQueue for writer to append to file
+					writeQueue.append(img)
+					framenum_thistrial += 1
+					cnt += 1
+					grabdata["frameNumberThisTrial"].append(framenum_thistrial)
+					grabdata['frameNumber'].append(cnt) # first frame = 1
+
+					if cnt % frameRatio == 0:
+						dispQueue.append(img[::ds,::ds])
+
+					# Release grab object
+					image_result.Release()
+
+					if cnt % chunkLengthInFrames == 0:
+						fps_count = int(round(cnt/grabtime))
+						print('Camera %i collected %i frames at %i fps.' % (n_cam,cnt,fps_count))
+
+					# === print things
+					if DEBUG:
+						print(grabdata)
+						print(len(writeQueue))
+						if len(writeQueue)>30:
+							break
+				else:
+					print("Image incomplete (why?)")
+					print('Image incomplete with image status %d ... \n' % image_result.GetImageStatus())
+					assert False
+			except PySpin.SpinnakerException as ex:
+				if framenum_thistrial>0:
+					if not v1:
+						# then is trial end
+
+						print("ITI, filenum ended: ", filenum)
+						# Save this fil;e.
+
+						# INitialize new fil;e
 						writeQueue.append('NEWFILE')
-						grabdata['newfile'].append(1)
-						filenum =+ 1
+						if len(grabdata['newfile'])>0:
+							grabdata['newfile'][-1] = 1 # the last frame is the end of the old file.
+
 						# TODO: save grabdata
 						# TODO: reset grabdata (for a new file).
 						SaveMetadata(cam_params, grabdata, suffix=f"-t{filenum}")
 						grabdata = ResetGrabdata(cam_params)
-					else:
-						grabdata['newfile'].append(0)
-				
-				grabdata['timeStamp'].append(grabtime)
 
-				# Append numpy array to writeQueue for writer to append to file
-				writeQueue.append(img)
+						# update framenum and filenum (for next file)
+						framenum_thistrial = 0
+						filenum += 1
+						# TODO: Reset grabdata, one for each file.
+				else:
+					# do nothing, have already saved previous trila
+					print("Ready for triggers.")
 
-				cnt += 1
-				grabdata['frameNumber'].append(cnt) # first frame = 1
 
-				if cnt % frameRatio == 0:
-					dispQueue.append(img[::ds,::ds])
 
-				# Release grab object
-				image_result.Release()
+				# if len(grabdata["frameNumber"])>0:
+				# else:
+				# 	print("Ready for triggers.")
 
-				if cnt % chunkLengthInFrames == 0:
-					fps_count = int(round(cnt/grabtime))
-					print('Camera %i collected %i frames at %i fps.' % (n_cam,cnt,fps_count))
-
-				# === print things
-				if DEBUG:
-					print(grabdata)
-					print(len(writeQueue))
-					if len(writeQueue)>30:
-						break
-			else:
-				print('Image incomplete with image status %d ... \n' % image_result.GetImageStatus())
 		# Else wait for next frame available
 		except PySpin.SpinnakerException as ex:
 			print('Error: %s' % ex)
@@ -626,30 +677,37 @@ def SaveMetadata(cam_params, grabdata, suffix=""):
 	frame_count = grabdata['frameNumber'][-1]
 	time_count = grabdata['timeStamp'][-1]
 	fps_count = int(round(frame_count/time_count))
-	print('Camera {} saved {} frames at {} fps.'.format(n_cam+1, frame_count, fps_count))
+	print('Camera {} saved {} frames at {} fps.'.format(n_cam+1, frame_count, fps_count)) # TODO, this fps only accurate if one long file.
+
+	print("suffix", suffix)
 
 	try:
-		npy_filename = os.path.join(full_folder_name, f'frametimes{suffix}.npy')
+		npy_filename = os.path.join(full_folder_name, f"frametimes{suffix}.npy")
 		x = np.array([meta['frameNumber'], meta['timeStamp']])
 		np.save(npy_filename,x)
-	except:
+		print(f"Saved numpy at: {npy_filename}")
+	except Exception as err:
+		print(err)
 		pass
 
-	csv_filename = os.path.join(full_folder_name, f'metadata{suffix}.csv')
+	csv_filename = os.path.join(full_folder_name, f"metadata{suffix}.csv")
 	meta = cam_params
 	meta['totalFrames'] = grabdata['frameNumber'][-1]
 	meta['totalTime'] = grabdata['timeStamp'][-1]
 	for k in ['newfile']:
 		meta[k] = grabdata[k]
 	meta["grabtime_firstframe"] = grabdata["grabtime_firstframe"]
+	# TODO: Save all the other metaparams in grabdata too.
 
 	keys = meta.keys()
 	vals = meta.values()
 	
 	try:
+		print(f"Saved metadat at: {csv_filename}")
 		with open(csv_filename, 'w', newline='') as f:
 			w = csv.writer(f, delimiter=',', quoting=csv.QUOTE_ALL)
 			for row in meta.items():
 				w.writerow(row)
-	except:
+	except Exception as err:
+		print(err)
 		pass
