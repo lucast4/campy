@@ -273,6 +273,7 @@ def ConfigureCustomImageSettings(cam_params, nodemap):
 		# increment. However, as these values are being set to the maximum,
 		# there is no reason to check against the increment.
 		node_width = PySpin.CIntegerPtr(nodemap.GetNode('Width'))
+		print("[cam.py] checking node_width")
 		print(PySpin.IsAvailable(node_width))
 		print(PySpin.IsWritable(node_width))
 		if PySpin.IsAvailable(node_width) and PySpin.IsWritable(node_width):

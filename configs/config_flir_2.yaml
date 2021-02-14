@@ -1,0 +1,40 @@
+# Recording parameters
+videoFolder: "D:/cam/campy/videos"
+videoFilename: "0.mp4"
+frameRate: 10
+recTimeInSec: 10 # total recording time, across all files.
+# recTimeInSec: 14400 # total recording time, across all files.
+
+# Trial-based recording
+trialStructure: False
+trialITI: 1000
+
+# Camera parameters
+cameraMake: "flir"
+numCams: 2
+cameraSelection: [0, 1]
+cameraSettings: ""
+cameraNames: ['Camera1', 'Camera2']
+
+# Compression parameters
+ffmpegLogLevel: ["quiet", "quiet"]
+gpuID: 0
+gpuMake: "nvidia"
+pixelFormatInput: "rgb24" # 'bayer_bggr8' 'rgb24'
+pixelFormatOutput: "rgb0"
+codec: "h264"
+quality: "21"
+
+# Display parameters
+chunkLengthInSec: 30
+displayFrameRate: 10
+displayDownsample: 2
+
+# Other parameters
+ffmpegPath: [] #["/home/usr/Documents/ffmpeg/ffmpeg"]
+frameWidth: [720, 720]
+# frameHeight: [480, 480]
+# frameWidth: [352, 352]
+frameHeight: [240, 240]
+# frameWidth: 1152
+# frameHeight: 1024
