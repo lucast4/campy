@@ -2,7 +2,7 @@
 videoFolder: "/home/lucast4/code/python/campy/videos"
 videoFilename: "0.mp4"
 frameRate: 10
-recTimeInSec: 10 # total recording time, across all files.
+recTimeInSec: 2 # total recording time, across all files.
 # recTimeInSec: 14400 # total recording time, across all files.
 
 # Trial-based recording
@@ -17,10 +17,10 @@ cameraSettings: ""
 cameraNames: 'Camera1'
 
 # Compression parameters
-ffmpegLogLevel: "quiet"
+ffmpegLogLevel: ["info"]
 gpuID: 0
 gpuMake: "nvidia"
-pixelFormatInput: "rgb24" # 'bayer_bggr8' 'rgb24'
+pixelFormatInput: "bgr8" # 'bayer_bggr8' 'rgb24'
 pixelFormatOutput: "rgb0"
 codec: "h264"
 quality: "21"

@@ -185,49 +185,6 @@ def AcquireSingleThread(n_cam, params):
 	# Start video file writer (main 'consumer' thread)
 	campipe.WriteFrames(cam_params, writeQueue, stopQueue)
 
-def AcquireOneCamera2(n_cam, params):
-	# Initializes metadata dictionary for this camera stream
-	# and inserts important configuration details
-
-	# Load camera parameters from config
-	cam_params = CreateCamParams(params, n_cam)
-
-	# Import the correct camera module for your camera
-	if cam_params["cameraMake"] == "basler":
-		from campy.cameras.basler import cam
-	elif cam_params["cameraMake"] == "flir":
-		from campy.cameras.flir import cam
-	elif cam_params["cameraMake"] == "emu":
-		from campy.cameras.emu import cam
-
-	# Open camera n_cam
-	camera, cam_params = cam.OpenCamera(cam_params)
-
-	# Initialize queues for video writer
-	writeQueue = deque()
-	stopQueue = deque([], 1)
-
-	# Start image window display queue ('consumer' thread)
-	dispQueue = deque([], 2)
-	threading.Thread(
-		target=display.DisplayFrames,
-		daemon=True,
-		args=(cam_params, dispQueue,),
-		).start()
-
-	# Start grabbing frames ('producer' thread)
-	threading.Thread(
-		target = cam.GrabFrames,
-		daemon=True,
-		args = (cam_params,
-				camera,
-				writeQueue,
-				dispQueue,
-				stopQueue),
-		).start()
-
-	# Start video file writer (main 'consumer' thread)
-	campipe.WriteFrames(cam_params, writeQueue, stopQueue)
 
 def AcquireOneCamera(n_cam):
 	# Initializes metadata dictionary for this camera stream
@@ -244,18 +201,22 @@ def AcquireOneCamera(n_cam):
 	elif cam_params["cameraMake"] == "emu":
 		from campy.cameras.emu import cam
 
-	# Open camera n_cam
-	if cam_params["cameraMake"] == "flir":
-		# Initialize camera
-		system = PySpin.System.GetInstance()
-		cam_list = system.GetCameras()
-		camera = cam_list.GetByIndex(n_cam)
+	if False:
+		# Old version before switch to simple_pyspin
+		# Open camera n_cam
+		if cam_params["cameraMake"] == "flir":
+			# Initialize camera
+			system = PySpin.System.GetInstance()
+			cam_list = system.GetCameras()
+			camera = cam_list.GetByIndex(n_cam)
 
-		# Configuration.
-		cam.PrepareCamera(camera, cam_params)
+			# Configuration.
+			cam.PrepareCamera(camera, cam_params)
 
-		# Start acquiring.
-		camera.BeginAcquisition()
+			# Start acquiring.
+			camera.BeginAcquisition()
+		else:
+			camera, cam_params = cam.OpenCamera(cam_params)
 	else:
 		camera, cam_params = cam.OpenCamera(cam_params)
 
@@ -473,9 +434,8 @@ def Main():
 		p = pool.map_async(AcquireOneCamera, range(0,params['numCams']))
 		p.get()
 
-if True:
-	parser = argparse.ArgumentParser(
-			description="Campy CLI", formatter_class=argparse.ArgumentDefaultsHelpFormatter,
-			)
-	params = ParseClargs(parser)
-	params = CombineConfigAndClargs(params)
+parser = argparse.ArgumentParser(
+		description="Campy CLI", formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+		)
+params = ParseClargs(parser)
+params = CombineConfigAndClargs(params)

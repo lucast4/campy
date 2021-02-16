@@ -11,7 +11,7 @@ cameraSelection: [0]
 cameraNames: ["Camera1"]
 
 # Compression parameters
-ffmpegLogLevel: "quiet"
+ffmpegLogLevel: "info"
 gpuID: 0
 pixelFormatInput: "rgb24" # 'bayer_bggr8' 'rgb24'
 pixelFormatOutput: "rgb0"

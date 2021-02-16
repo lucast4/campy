@@ -105,9 +105,9 @@ def OpenWriter(cam_params, filenum=0):
 	while(True):
 		try:
 			try:
-				# print("Writing")
-				# print(cam_params)
-				# print(gpu_params)
+				print("Writing")
+				print(cam_params)
+				print(gpu_params)
 				# assert False
 				writer = write_frames(
 					full_file_name,
