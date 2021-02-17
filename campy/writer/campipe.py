@@ -123,7 +123,6 @@ def OpenWriter(cam_params, filenum=0):
 					output_params=gpu_params,
 					)
 				writer.send(None) # Initialize the generator
-				# TODO: why images are tiled in saved file?
 				break
 			except Exception as e:
 				print("Error (writing)")
@@ -159,13 +158,14 @@ def WriteFrames(cam_params, writeQueue, stopQueue):
 				elif message == 'NEWFILE':
 					# close file, reopen a new file.
 					print('Closing+reopining video writer for camera {}. Please wait...'.format(n_cam+1))
-					time.sleep(1)
+					time.sleep(0.01)
 					writer.close()
 					filenum += 1
 					writer = OpenWriter(cam_params, filenum)
 			else:
 				time.sleep(0.0001)
 		except KeyboardInterrupt:
+			print("Keyboard Interrupt writing")
 			stopQueue.append('STOP GRABBING')
 
 	# Closing up...

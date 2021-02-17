@@ -392,6 +392,13 @@ def ParseClargs(parser):
 		type=ast.literal_eval,
 		help="intertrial interval (msec). if 2 triggers seprated by more than this, then will make new file. ",
 	)
+	parser.add_argument(
+		"--triggerMode",
+		dest="triggerMode",
+		type=ast.literal_eval,
+		help="flir only, whether to use trigger mode ['On', 'Off']"
+	)
+
 	return parser.parse_args()
 
 def CheckConfig(params, clargs):
