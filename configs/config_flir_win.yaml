@@ -6,9 +6,9 @@ recTimeInSec: 10 # total recording time, across all files.
 # recTimeInSec: 14400 # total recording time, across all files.
 
 # Trial-based recording
-trialStructure: True
+trialStructure: False
 trialITI: 1000
-triggerMode: "Off"
+triggerMode: "On"
 
 # Camera settings
 # TriggerMode: "On"
