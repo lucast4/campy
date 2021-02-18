@@ -213,11 +213,11 @@ def GrabFrames(cam_params, camera, writeQueue, dispQueue, stopQueue, v1=False):
             if cnt == 0:
                 # timeFirstGrab2 = time.time_ns()
                 timeFirstGrab = tstamp
-            
-            grabdata["grabtime_firstframe"]= timeFirstGrab/1e9
+            if framenum_thistrial==0:
+                grabdata["grabtime_firstframe"]= timeFirstGrab/1e9
 
-            # grabtime2 = (time.time_ns() - timeFirstGrab)/1e9
-            grabtime = (tstamp - timeFirstGrab2)/1e9
+            # grabtime2 = (time.time_ns() - timeFirstGrab2)/1e9
+            grabtime = (tstamp - timeFirstGrab)/1e9
 
             if len(grabdata['timeStamp'])>0:
                 # then this is not first trial.
