@@ -1,14 +1,14 @@
 # Recording parameters
-videoFolder: "D:/cam/campy/videos"
-videoFilename: "0.mp4"
+videoFolder: "D:/cam/campy/videos/test_frame_times_1"
+videoFilename: "vid.mp4"
 frameRate: 10
-recTimeInSec: 10 # total recording time, across all files.
+recTimeInSec: 14400 # total recording time, across all files.
 # recTimeInSec: 14400 # total recording time, across all files.
 
 # Trial-based recording
 trialStructure: False
-trialITI: 1000
-triggerMode: "On"
+trialITI: 100
+triggerMode: "Off"
 
 # Camera settings
 # TriggerMode: "On"

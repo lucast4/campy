@@ -11,6 +11,7 @@ from simple_pyspin import Camera, list_cameras
 DEBUG = False
 TRIGGERMODE = "Off" # "Off" % TODO make this param, i..e, camrera params.
 # TODO: how to save camera settings PySpin?
+NOSAVE = False # for debugging, to not save video or metadat.
 
 def OpenCamera(cam_params, frameWidth=1152, frameHeight=1024):
     # Open and load features for all cameras
@@ -84,7 +85,7 @@ def OpenCamera(cam_params, frameWidth=1152, frameHeight=1024):
     print("Setting gain to %.1f dB" % gain)
     cam.Gain = gain
     cam.ExposureAuto = 'Off'
-    cam.ExposureTime = 5000 # microseconds
+    cam.ExposureTime = 4000 # microseconds
 
     # If we want an easily viewable image, turn on gamma correction.
     # NOTE: for scientific image processing, you probably want to
@@ -102,6 +103,8 @@ def OpenCamera(cam_params, frameWidth=1152, frameHeight=1024):
     # configure
     # cam.TriggerMode=TRIGGERMODE # "Off"
     cam.TriggerMode=cam_params["triggerMode"] # "Off"
+    cam.TriggerActivation = "RisingEdge"
+    cam.TriggerSelector = "FrameStart"
 
     # get serial num
     cam_params['cameraSerialNo'] = cam.DeviceID
@@ -189,7 +192,7 @@ def GrabFrames(cam_params, camera, writeQueue, dispQueue, stopQueue, v1=False):
         # image_result = camera.get_image(wait=True)
         if True:
             # img = camera.get_array(timeout = 20) # msec
-            img = camera.get_array(timeout = cam_params['trialITI']) # msec
+            img, tstamp = camera.get_array(timeout = cam_params['trialITI'], get_timestamp=True) # msec
         else:
             # image_result = camera.get_image(timeout = 20)
             image_result = camera.get_image()
@@ -208,21 +211,29 @@ def GrabFrames(cam_params, camera, writeQueue, dispQueue, stopQueue, v1=False):
 
             # Get timestamp of grabbed frame from camera
             if cnt == 0:
-                timeFirstGrab = time.monotonic_ns()
-            grabdata["grabtime_firstframe"]=timeFirstGrab/1e9
-            grabtime = (time.monotonic_ns() - timeFirstGrab)/1e9
+                # timeFirstGrab2 = time.time_ns()
+                timeFirstGrab = tstamp
+            
+            grabdata["grabtime_firstframe"]= timeFirstGrab/1e9
+
+            # grabtime2 = (time.time_ns() - timeFirstGrab)/1e9
+            grabtime = (tstamp - timeFirstGrab2)/1e9
+
             if len(grabdata['timeStamp'])>0:
                 # then this is not first trial.
                 inter_frame_time = 1000*(grabtime-grabdata['timeStamp'][-1])
                 print("grabtime, inter_frame_time", grabtime, inter_frame_time)
-                # TODO: printing above, make working when metadat one for each fil;e.
+                
+                # uncomment this and above to compare two methods for getting time.
+                # print(grabtime, grabtime2, (grabtime2-grabtime)*1000)
 
             # split file? This useful for trial-based recordings. (one video per trial)
             # (each trial separated by a long duration)
             grabdata['timeStamp'].append(grabtime)
 
             # Append numpy array to writeQueue for writer to append to file
-            writeQueue.append(img)
+            if not NOSAVE:
+                writeQueue.append(img)
             framenum_thistrial += 1
             cnt += 1
             grabdata["frameNumberThisTrial"].append(framenum_thistrial)
@@ -269,7 +280,7 @@ def GrabFrames(cam_params, camera, writeQueue, dispQueue, stopQueue, v1=False):
                     # do nothing, have already saved previous trila
                     print("Ready for triggers.")
             else:
-                time.sleep(0.0001)
+                # time.sleep(0.0001)
                 print("Waiting for frames")
 
 
@@ -300,6 +311,8 @@ def ResetGrabdata(cam_params, filenum):
 
 def SaveMetadata(cam_params, grabdata):
     # TODO: look thru this. seems to be working.
+    if NOSAVE:
+        return
     n_cam = cam_params["n_cam"]
 
     full_folder_name = os.path.join(cam_params["videoFolder"], cam_params["cameraName"])
