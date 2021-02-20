@@ -298,6 +298,12 @@ def ParseClargs(parser):
 		help="Path to camera settings file.",
 	)
 	parser.add_argument(
+		"--cameraSettingsDir",
+		dest="cameraSettingsDir",
+		type=ast.literal_eval,
+		help="assumes within this dir camera settings are <serial number>.yaml",
+		)
+	parser.add_argument(
 		"--frameHeight", 
 		dest="frameHeight",
 		type=ast.literal_eval, 

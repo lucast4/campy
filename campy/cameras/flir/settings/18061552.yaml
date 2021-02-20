@@ -1,0 +1,9 @@
+## Flea3
+
+PixelFormat: "BayerRG8"
+GainAuto: "Off"
+ExposureAuto: "Off"
+ExposureTime: 3800
+AcquisitionMode: "Continuous"
+TriggerActivation: "RisingEdge"
+TriggerSelector: "FrameStart"

@@ -1,0 +1,11 @@
+# Blackfly
+
+PixelFormat: "BayerRG8"
+GainAuto: "Off"
+ExposureAuto: "Off"
+ExposureTime: 1000
+AcquisitionMode: "Continuous"
+TriggerActivation: "RisingEdge"
+TriggerSelector: "FrameStart"
+TriggerOverlap: "ReadOut"
+# SensorShutterMode: "Global" # running into arrors.ACtually doesnt have global.just Rolling and GlobalReset

@@ -7,6 +7,7 @@ import numpy as np
 from collections import deque
 import csv
 from simple_pyspin import Camera, list_cameras
+import yaml
 
 DEBUG = False
 TRIGGERMODE = "Off" # "Off" % TODO make this param, i..e, camrera params.
@@ -30,37 +31,57 @@ def OpenCamera(cam_params, frameWidth=1152, frameHeight=1024):
     cam = Camera(index = cam_index)
     cam.init()
 
+    # get serial num
+    cam_params['cameraSerialNo'] = cam.DeviceID
+    cam_params['cameraModel'] = cam.DeviceModelName
+
+    # Load camera settings
+    settings_path = os.path.join(cam_params['cameraSettingsDir'], f"{cam_params['cameraSerialNo']}.yaml")
+
+    with open(settings_path, 'rb') as file:
+        cam_settings = yaml.safe_load(file)
+
+    for k, v in cam_settings.items():
+        cam.__setattr__(k, v)
+        print(f"[{cam.DeviceID}] setting {k} to {v}")
+
+
     # TODO: set pixelformat
-    if False:
-        if 'Bayer' in cam.PixelFormat:
-            cam.PixelFormat = "RGB8"
+    # if False:
+    #     if 'Bayer' in cam.PixelFormat:
+    #         cam.PixelFormat = "RGB8"
     # cam.PixelFormat = "BGR8" # blackfly
     # cam.PixelFormat = "BayerGR8" # flea (default is BayerRG8)
-    if True:
-        print("Pixel format")
-        print(cam.get_info("PixelFormat"))
-        # cam.PixelFormat = "RGB8" # flea (default is BayerRG8)
-        cam.PixelFormat = "BayerRG8" # flea (default is BayerRG8)
-    else:
-        cam.cam.PixelFormat.SetValue(PySpin.PixelFormat_BayerBG8)
+    # if True:
+    #     print("Pixel format")
+    #     print(cam.get_info("PixelFormat"))
+    #     # cam.PixelFormat = "RGB8" # flea (default is BayerRG8)
+    #     cam.PixelFormat = "BayerRG8" # flea (default is BayerRG8)
+    # else:
+    #     cam.cam.PixelFormat.SetValue(PySpin.PixelFormat_BayerBG8)
 
     # TODO: set window smaller if desired
-    if True:
-        hmax = cam.get_info("Height")["max"]
-        wmax = cam.get_info("Width")["max"]
-        cam.Width = wmax
-        # cam.Height = cam.SensorHeight // 2
-        # cam.Height = cam.SensorHeight // 2
-        cam.Height = hmax
-        cam.OffsetX = 0
-        cam.OffsetY = 0
-        # Configure custom image settings
-        # frameWidth, frameHeight = ConfigureCustomImageSettings(cam_params, nodemap)
-        cam_params["frameWidth"] = cam.Width
-        cam_params["frameHeight"] = cam.Height
-    else:
-        cam.Width = cam_params["frameWidth"]
-        cam.Height = cam_params["frameHeight"] 
+    hmax = cam.get_info("Height")["max"]
+    wmax = cam.get_info("Width")["max"]
+    cam.Width = wmax
+    cam.Height = hmax
+    if "fly" in cam_params['cameraModel']:
+        cam.Width = 576
+        cam.Height = 352
+    # make sure is divisible by 16
+    cam.Width = cam.Width - cam.Width%16
+    cam.Height = cam.Height - cam.Height%16
+
+    print("TODO: offsets to center.")
+    cam.OffsetX = 0
+    cam.OffsetY = 0
+    # Configure custom image settings
+    # frameWidth, frameHeight = ConfigureCustomImageSettings(cam_params, nodemap)
+    cam_params["frameWidth"] = cam.Width
+    cam_params["frameHeight"] = cam.Height
+    # else:
+    #     cam.Width = cam_params["frameWidth"]
+    #     cam.Height = cam_params["frameHeight"] 
 
     # To change the frame rate, we need to enable manual control
     # cam.AcquisitionFrameRateAuto = 'Off'
@@ -81,11 +102,13 @@ def OpenCamera(cam_params, frameWidth=1152, frameHeight=1024):
     # To control the exposure settings, we need to turn off auto
     cam.GainAuto = 'Off'
     # Set the gain to 20 dB or the maximum of the camera.
-    gain = min(20, cam.get_info('Gain')['max'])
-    print("Setting gain to %.1f dB" % gain)
+    gain = min(22, cam.get_info('Gain')['max'])
+    print(f"[{cam.DeviceID}] setting gain to {gain} dB")
     cam.Gain = gain
-    cam.ExposureAuto = 'Off'
-    cam.ExposureTime = 4000 # microseconds
+
+    # Exposure time
+    # cam.ExposureAuto = 'Off'
+    # cam.ExposureTime = 4000 # microseconds
 
     # If we want an easily viewable image, turn on gamma correction.
     # NOTE: for scientific image processing, you probably want to
@@ -98,16 +121,15 @@ def OpenCamera(cam_params, frameWidth=1152, frameHeight=1024):
             print("Failed to change Gamma correction (not avaiable on some cameras).")
 
     # Other things:
-    cam.AcquisitionMode = "Continuous"
+    # cam.AcquisitionMode = "Continuous"
 
     # configure
     # cam.TriggerMode=TRIGGERMODE # "Off"
     cam.TriggerMode=cam_params["triggerMode"] # "Off"
-    cam.TriggerActivation = "RisingEdge"
-    cam.TriggerSelector = "FrameStart"
 
-    # get serial num
-    cam_params['cameraSerialNo'] = cam.DeviceID
+    # cam.TriggerActivation = "RisingEdge"
+    # cam.TriggerSelector = "FrameStart"
+
 
     # acquisition start
     cam.start() # Start recording
@@ -131,7 +153,7 @@ def ConvertImages(image_result):
     return img
 
 
-def GrabFrames(cam_params, camera, writeQueue, dispQueue, stopQueue, v1=False):
+def GrabFrames(cam_params, camera, writeQueue, dispQueue, stopQueue):
     """
     v1, use old version where intertrial interval is based on time between successive frames. this 
     problem is that saves after frame 0. new version saves during ITI istelf. detects ITI based on 
@@ -154,14 +176,12 @@ def GrabFrames(cam_params, camera, writeQueue, dispQueue, stopQueue, v1=False):
     # grabdata["grabtime_firstframe"] = []
     grabdata = ResetGrabdata(cam_params, filenum=0)
 
-    frameRate = cam_params['frameRate']
-    recTimeInSec = cam_params['recTimeInSec']
     chunkLengthInSec = cam_params["chunkLengthInSec"]
     ds = cam_params["displayDownsample"]
     displayFrameRate = cam_params["displayFrameRate"]
-
+    frameRate = cam_params['frameRate']
     frameRatio = int(round(frameRate/displayFrameRate))
-    numImagesToGrab = recTimeInSec*frameRate
+    numImagesToGrab = cam_params['recTimeInSec']*frameRate
     chunkLengthInFrames = int(round(chunkLengthInSec*frameRate))
 
     if cam_params["trialStructure"]:
@@ -170,37 +190,30 @@ def GrabFrames(cam_params, camera, writeQueue, dispQueue, stopQueue, v1=False):
     else:
         timeout = None # then wait indefinitely
 
-    grabbing = False
-    if False:
-        if cam_params["trigConfig"] and cam_params["settingsConfig"]:
-            grabbing = True
-    else:
-        grabbing = True
     print(cam_params["cameraName"], "ready to trigger.")
 
-    while(grabbing):
+    while(camera.running):
         if stopQueue or cnt >= numImagesToGrab: # TODO, also add limit within each file.
             # Stop experiment.
-            print("STOPPING GRABBING")
+            # print("STOPPING GRABBING")
             # CloseCamera(cam_params, camera, grabdata)
             writeQueue.append('STOP')
             # TODO: make option for this to end when long gap (inter trial interval).
             # TODO: make sure after this STOP, keeps going, with new file.
             CloseCamera(cam_params, camera, grabdata)
             break
+
         # Grab image from camera buffer if available
         # image_result = camera.get_image(wait=True)
-        if True:
-            # img = camera.get_array(timeout = 20) # msec
-            img, tstamp = camera.get_array(timeout = cam_params['trialITI'], get_timestamp=True) # msec
-        else:
-            # image_result = camera.get_image(timeout = 20)
-            image_result = camera.get_image()
-            if not image_result.IsIncomplete():
-                img  = ConvertImages(image_result)
-                image_result.Release()
-            else:
-                img = None
+        # img = camera.get_array(timeout = 20) # msec
+        img, tstamp = camera.get_array(timeout = cam_params['trialITI'], get_timestamp=True) # msec
+        # # image_result = camera.get_image(timeout = 20)
+        # image_result = camera.get_image()
+        # if not image_result.IsIncomplete():
+        #     img  = ConvertImages(image_result)
+        #     image_result.Release()
+        # else:
+        #     img = None
 
         if img is not None:
             # Then got a frame
@@ -249,24 +262,16 @@ def GrabFrames(cam_params, camera, writeQueue, dispQueue, stopQueue, v1=False):
                 fps_count = int(round(cnt/grabtime))
                 print('Camera %i collected %i frames at %i fps (average over all rec).' % (n_cam,cnt,fps_count))
 
-            # === print things
-            if DEBUG:
-                print(grabdata)
-                print(len(writeQueue))
-                if len(writeQueue)>30:
-                    break
         else:
             if cam_params["trialStructure"]:
                 if framenum_thistrial>0:
                     # Then this signals ed of a trial
                     print("ITI, filenum ended: ", grabdata["filenum"])
                     # Save this fil;e.
+                    # time.sleep(0.02) # so not overlap with trial?
 
                     # INitialize new fil;e
                     writeQueue.append('NEWFILE')
-                    if len(grabdata['newfile'])>0:
-                        grabdata['newfile'][-1] = 1 # the last frame is the end of the old file.
-                        # TODO, what is purpose of newfiel?
 
                     # TODO: save grabdata
                     # TODO: reset grabdata (for a new file).
@@ -302,7 +307,7 @@ def ResetGrabdata(cam_params, filenum):
     grabdata = {}
     grabdata['timeStamp'] = []
     grabdata['frameNumber'] = []
-    grabdata['newfile'] = []
+    # grabdata['newfile'] = []
     grabdata["grabtime_firstframe"] = []
     grabdata["frameNumberThisTrial"] = []
     grabdata["filenum"] = filenum
@@ -345,8 +350,8 @@ def SaveMetadata(cam_params, grabdata):
     meta = cam_params
     meta['totalFrames'] = grabdata['frameNumber'][-1]
     meta['totalTime'] = grabdata['timeStamp'][-1]
-    for k in ['newfile']:
-        meta[k] = grabdata[k]
+    # for k in ['newfile']:
+    #     meta[k] = grabdata[k]
     meta["grabtime_firstframe"] = grabdata["grabtime_firstframe"]
     # TODO: Save all the other metaparams in grabdata too.
 
@@ -369,15 +374,19 @@ def CloseCamera(cam_params, camera, grabdata):
     print('Closing camera {}... Please wait.'.format(n_cam+1))
     # Close Basler camera after acquisition stops
     # TODO: fix camera closing
-    try:
-        SaveMetadata(cam_params,grabdata)
-        time.sleep(1)
-        camera.stop()
-        camera.close()
-        # camera.EndAcquisition()     
-        # camera.DeInit()
-        # del camera
-    except Exception as err: 
-        print(err)
-        print("TRIED TO CLOSE, FAILED")
-        time.sleep(0.1)
+    while True:
+        try:
+            try:
+                SaveMetadata(cam_params,grabdata)
+                time.sleep(1)
+                camera.stop()
+                camera.close()
+                # camera.EndAcquisition()     
+                # camera.DeInit()
+                # del camera
+            except Exception as err: 
+                print(err)
+                print("TRIED TO CLOSE, FAILED")
+                time.sleep(0.1)
+        except KeyboardInterrupt:
+            break
