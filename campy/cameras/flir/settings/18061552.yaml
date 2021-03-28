@@ -3,7 +3,11 @@
 PixelFormat: "BayerRG8"
 GainAuto: "Off"
 ExposureAuto: "Off"
-ExposureTime: 3800
+ExposureTime: 4000
 AcquisitionMode: "Continuous"
 TriggerActivation: "RisingEdge"
 TriggerSelector: "FrameStart"
+Width: 896
+Height: 900
+OffsetX: 216
+OffsetY: 74

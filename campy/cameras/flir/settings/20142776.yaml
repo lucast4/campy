@@ -3,9 +3,13 @@
 PixelFormat: "BayerRG8"
 GainAuto: "Off"
 ExposureAuto: "Off"
-ExposureTime: 1000
+ExposureTime: 1500 # wroks with 50fps
 AcquisitionMode: "Continuous"
 TriggerActivation: "RisingEdge"
 TriggerSelector: "FrameStart"
 TriggerOverlap: "ReadOut"
+Width: 700
+Height: 440
+OffsetX: 420
+OffsetY: 292
 # SensorShutterMode: "Global" # running into arrors.ACtually doesnt have global.just Rolling and GlobalReset

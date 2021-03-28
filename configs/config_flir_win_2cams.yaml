@@ -1,5 +1,5 @@
 # Recording parameters
-videoFolder: "D:/cam/campy/videos/test_2cams_4"
+videoFolder: "D:/cam/campy/videos/camtest2_joint_calib"
 videoFilename: "vid.mp4"
 frameRate: null
 recTimeInSec: 14400 # total recording time, across all files.
@@ -7,7 +7,7 @@ recTimeInSec: 14400 # total recording time, across all files.
 
 # Trial-based recording
 trialStructure: True
-trialITI: 100
+trialITI: 200
 triggerMode: "On"
 
 # Camera settings
@@ -22,7 +22,7 @@ cameraSettingsDir: "C:/LT/code/campy/campy/cameras/flir/settings"
 cameraNames: ['Camera1', 'Camera2']
 
 # Compression parameters
-ffmpegLogLevel: "quiet"
+ffmpegLogLevel: ["info", "info"]
 gpuID: 0
 gpuMake: "nvidia"
 # pixelFormatInput: "bgr8" # 'bayer_bggr8' 'rgb24' BLACKFLY

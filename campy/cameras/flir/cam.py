@@ -61,20 +61,17 @@ def OpenCamera(cam_params, frameWidth=1152, frameHeight=1024):
     #     cam.cam.PixelFormat.SetValue(PySpin.PixelFormat_BayerBG8)
 
     # TODO: set window smaller if desired
-    hmax = cam.get_info("Height")["max"]
-    wmax = cam.get_info("Width")["max"]
-    cam.Width = wmax
-    cam.Height = hmax
-    if "fly" in cam_params['cameraModel']:
-        cam.Width = 576
-        cam.Height = 352
-    # make sure is divisible by 16
-    cam.Width = cam.Width - cam.Width%16
-    cam.Height = cam.Height - cam.Height%16
-
+    if "Width" not in cam_settings.keys():
+        wmax = cam.get_info("Width")["max"]
+        cam.Width = wmax - wmax%16
+        cam.OffsetX = 0
+    if "Height" not in cam_settings.keys():
+        hmax = cam.get_info("Height")["max"]
+        cam.Height = hmax - hmax%16
+        # cam.Height = cam.Height - cam.Height%16
+        cam.OffsetY = 0
     print("TODO: offsets to center.")
-    cam.OffsetX = 0
-    cam.OffsetY = 0
+
     # Configure custom image settings
     # frameWidth, frameHeight = ConfigureCustomImageSettings(cam_params, nodemap)
     cam_params["frameWidth"] = cam.Width
