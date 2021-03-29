@@ -8,6 +8,7 @@ AcquisitionMode: "Continuous"
 TriggerActivation: "RisingEdge"
 TriggerSelector: "FrameStart"
 Width: 896
-Height: 900
+# Height: 900 # first try
+Height: 700 
 OffsetX: 216
-OffsetY: 74
+OffsetY: 174

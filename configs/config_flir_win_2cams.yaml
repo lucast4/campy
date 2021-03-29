@@ -1,5 +1,5 @@
 # Recording parameters
-videoFolder: "D:/cam/campy/videos/camtest2_joint_calib"
+videoFolder: "D:/cam/campy/videos/camtest3_finger_2"
 videoFilename: "vid.mp4"
 frameRate: null
 recTimeInSec: 14400 # total recording time, across all files.
